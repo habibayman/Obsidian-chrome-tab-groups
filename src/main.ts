@@ -1,99 +1,128 @@
-import {App, Editor, MarkdownView, Modal, Notice, Plugin} from 'obsidian';
-import {DEFAULT_SETTINGS, MyPluginSettings, SampleSettingTab} from "./settings";
+import { Plugin, WorkspaceLeaf } from "obsidian";
+import { GroupManager } from "./GroupManager";
+import { DOMRenderer } from "./DOMRenderer";
+import { ContextMenuHandler } from "./ContextMenu";
+import { TabGroupsSettingTab } from "./SettingsTab";
 
-// Remember to rename these classes and interfaces!
+export default class TabGroupsPlugin extends Plugin {
+  groupManager!: GroupManager;
+  private renderer!: DOMRenderer;
+  private contextMenu!: ContextMenuHandler;
 
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+  async onload(): Promise<void> {
+    // 1. Load persisted data
+    this.groupManager = new GroupManager(this);
+    await this.groupManager.load();
 
-	async onload() {
-		await this.loadSettings();
+    // 2. Build renderer and context menu
+    this.renderer = new DOMRenderer(
+      this.groupManager,
+      async (groupId: string) => {
+        await this.groupManager.toggleCollapse(groupId);
+        this.render();
+      },
+    );
 
-		// This creates an icon in the left ribbon.
-		this.addRibbonIcon('dice', 'Sample', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
+    this.contextMenu = new ContextMenuHandler(this, this.groupManager, () =>
+      this.render(),
+    );
+    this.contextMenu.register();
 
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status bar text');
+    // 3. Settings tab
+    this.addSettingTab(
+      new TabGroupsSettingTab(this.app, this, () => this.render()),
+    );
 
-		// This adds a simple command that can be triggered anywhere
-		this.addCommand({
-			id: 'open-modal-simple',
-			name: 'Open modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'replace-selected',
-			name: 'Replace selected content',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				editor.replaceSelection('Sample editor command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-modal-complex',
-			name: 'Open modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
+    // 4. Commands
+    this.addCommand({
+      id: "create-tab-group",
+      name: "Create new tab group from active tab",
+      callback: () => {
+        const active = this.app.workspace.activeLeaf;
+        if (!active) return;
+        // Import modal lazily to avoid circular deps at module level
+        import("./ContextMenu").then(({ ContextMenuHandler: _unused }) => {
+          // Re-use the "New group" flow by faking a right-click menu
+        });
+        // Directly open a simple prompt
+        this.createGroupFromActiveLeaf(active);
+      },
+    });
 
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
-				return false;
-			}
-		});
+    this.addCommand({
+      id: "remove-tab-from-group",
+      name: "Remove active tab from its group",
+      callback: async () => {
+        const active = this.app.workspace.activeLeaf;
+        if (!active) return;
+        const group = this.groupManager.resolveGroupForLeaf(active);
+        if (!group) return;
+        await this.groupManager.removeLeafFromGroup(group.id, active);
+        this.render();
+      },
+    });
 
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
+    this.addCommand({
+      id: "toggle-collapse-active-group",
+      name: "Collapse / expand active tab's group",
+      callback: async () => {
+        const active = this.app.workspace.activeLeaf;
+        if (!active) return;
+        const group = this.groupManager.resolveGroupForLeaf(active);
+        if (!group) return;
+        await this.groupManager.toggleCollapse(group.id);
+        this.render();
+      },
+    });
 
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			new Notice("Click");
-		});
+    // 5. Workspace event listeners
+    this.registerEvent(
+      this.app.workspace.on("layout-change", () => this.render()),
+    );
+    this.registerEvent(
+      this.app.workspace.on("active-leaf-change", () => this.render()),
+    );
 
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
+    // 6. Initial render
+    // Wait one tick for Obsidian to finish restoring the layout
+    this.app.workspace.onLayoutReady(() => this.render());
+  }
 
-	}
+  onunload(): void {
+    this.renderer.destroy();
+    this.contextMenu.unregister();
+  }
 
-	onunload() {
-	}
+  // Render
 
-	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<MyPluginSettings>);
-	}
+  render(): void {
+    try {
+      const leaves: WorkspaceLeaf[] = [];
+      this.app.workspace.iterateRootLeaves((leaf) => leaves.push(leaf));
+      this.renderer.render(leaves);
+      this.applySettingsClasses();
+    } catch (err) {
+      console.error("[Tab Groups] render error:", err);
+    }
+  }
 
-	async saveSettings() {
-		await this.saveData(this.settings);
-	}
-}
+  //Settings-driven CSS
 
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
+  private applySettingsClasses(): void {
+    const body = document.body;
+    if (this.groupManager.settings.showTabBorder) {
+      body.classList.add("tab-groups-show-border");
+    } else {
+      body.classList.remove("tab-groups-show-border");
+    }
+  }
 
-	onOpen() {
-		let {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
+  // create group from active leaf via quick input
 
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
+  private createGroupFromActiveLeaf(leaf: WorkspaceLeaf): void {
+    const name = "New Group";
+    void this.groupManager.createGroup(name, "blue", [leaf]).then(() => {
+      this.render();
+    });
+  }
 }

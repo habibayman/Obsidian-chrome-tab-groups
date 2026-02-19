@@ -1,3 +1,7 @@
+# Build output
+main.js
+main.js.map
+
 # Node.js
 node_modules/
 npm-debug.log*
