@@ -1,0 +1,70 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-error.log*
+yarn-debug.log*
+lerna-debug.log*
+
+# Dependency directories
+jspm_packages/
+web_modules/
+
+# Optional npm cache directory
+.npm
+
+# Output of 'npm pack'
+*.tgz
+
+# Logs
+logs/
+*.log
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage and test reports
+coverage/
+*.lcov
+.nyc_output
+
+# Build outputs
+build/
+dist/
+.out/
+.next/
+.nuxt/
+.vuepress/dist/
+.serverless/
+.cache/
+.parcel-cache/
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# Editor and IDE files
+.vscode/
+.vscode-test/
+*.sublime-project
+*.sublime-workspace
+sftp-config.json
+.DS_Store
+.trashes
+*~
+
+# Parcel bundler cache
+.cache/
+.parcel-cache/
+
+# Yarn v2
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*   
