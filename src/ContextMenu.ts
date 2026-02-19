@@ -1,5 +1,5 @@
 import { Menu, Modal, Setting, WorkspaceLeaf, type App } from "obsidian";
-import type { GroupColor, TabGroup } from "./types";
+import type { GroupColor } from "./types";
 import { COLOR_VALUES, GROUP_COLORS } from "./types";
 import type { GroupManager } from "./GroupManager";
 import type TabGroupsPlugin from "./main";
