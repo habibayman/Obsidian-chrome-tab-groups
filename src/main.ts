@@ -40,11 +40,6 @@ export default class TabGroupsPlugin extends Plugin {
       callback: () => {
         const active = this.app.workspace.activeLeaf;
         if (!active) return;
-        // Import modal lazily to avoid circular deps at module level
-        import("./ContextMenu").then(({ ContextMenuHandler: _unused }) => {
-          // Re-use the "New group" flow by faking a right-click menu
-        });
-        // Directly open a simple prompt
         this.createGroupFromActiveLeaf(active);
       },
     });

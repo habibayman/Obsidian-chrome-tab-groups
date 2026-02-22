@@ -9,6 +9,7 @@ function generateId(): string {
 }
 
 function leafFilePath(leaf: WorkspaceLeaf): string | null {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const viewFile = (leaf.view as any)?.file?.path;
   if (viewFile) return viewFile;
 
