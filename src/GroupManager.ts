@@ -9,9 +9,18 @@ function generateId(): string {
 }
 
 function leafFilePath(leaf: WorkspaceLeaf): string | null {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const file = (leaf.view as any)?.file;
-  return file?.path ?? null;
+  const viewFile = (leaf.view as any)?.file?.path;
+  if (viewFile) return viewFile;
+
+  try {
+    const state = leaf.getViewState?.();
+    const statePath = state?.state?.file;
+    if (typeof statePath === "string" && statePath) return statePath;
+  } catch {
+    // ignore
+  }
+
+  return null;
 }
 
 // GroupManager
@@ -69,10 +78,7 @@ export class GroupManager {
     return this.data.groups.find((g) => g.filePaths.includes(path));
   }
 
-  /**
-   * From a pool of live WorkspaceLeaves, return those that belong to the
-   * given group (matched by file path).
-   */
+  // get the leaves in this group that are currently open in the workspace
   getLeavesForGroup(
     groupId: string,
     allLeaves: WorkspaceLeaf[],
