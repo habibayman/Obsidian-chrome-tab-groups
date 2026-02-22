@@ -50,6 +50,7 @@ export class DOMRenderer {
       el.removeAttribute("data-tg-color");
       (el as HTMLElement).style.removeProperty("--tg-color");
       el.removeAttribute("data-tg-collapsed");
+      (el as HTMLElement).style.removeProperty("display");
     });
   }
 
@@ -66,13 +67,17 @@ export class DOMRenderer {
 
     const stripEl = (strip as unknown as { containerEl: HTMLElement })
       .containerEl;
-    // Try the inner container first (modern Obsidian), fall back to outer container
-    const headerContainer =
-      stripEl?.querySelector<HTMLElement>(
-        ".workspace-tab-header-container-inner",
-      ) ??
-      stripEl?.querySelector<HTMLElement>(".workspace-tab-header-container");
-    if (!headerContainer) return;
+    if (!stripEl) return;
+
+    const innerContainer = stripEl.querySelector<HTMLElement>(
+      ".workspace-tab-header-container-inner",
+    );
+    const outerContainer = stripEl.querySelector<HTMLElement>(
+      ".workspace-tab-header-container",
+    );
+    if (!outerContainer) return;
+
+    const tabParent = innerContainer ?? outerContainer;
 
     let i = 0;
     while (i < orderedLeaves.length) {
@@ -95,7 +100,7 @@ export class DOMRenderer {
         j++;
       }
 
-      this.injectGroup(group, run, headerContainer);
+      this.injectGroup(group, run, tabParent);
       i = j;
     }
   }
@@ -105,7 +110,7 @@ export class DOMRenderer {
   private injectGroup(
     group: TabGroup,
     run: WorkspaceLeaf[],
-    headerContainer: HTMLElement,
+    tabParent: HTMLElement,
   ): void {
     const color = COLOR_VALUES[group.color];
 
@@ -116,9 +121,11 @@ export class DOMRenderer {
       tabEl.dataset.tgId = group.id;
       tabEl.dataset.tgColor = group.color;
       tabEl.style.setProperty("--tg-color", color);
-
       if (group.collapsed) {
         tabEl.dataset.tgCollapsed = "true";
+        tabEl.style.display = "none";
+      } else {
+        tabEl.style.removeProperty("display");
       }
     }
 
@@ -127,7 +134,7 @@ export class DOMRenderer {
     if (!firstTabEl) return;
 
     const chip = this.createChip(group, run, color);
-    headerContainer.insertBefore(chip, firstTabEl);
+    tabParent.insertBefore(chip, firstTabEl);
   }
 
   private createChip(
@@ -141,6 +148,8 @@ export class DOMRenderer {
     chip.dataset.tabGroupChipId = group.id;
     chip.dataset.tabGroupRunSize = String(run.length);
     chip.style.setProperty("--tg-color", color);
+    chip.style.zIndex = "10";
+    chip.style.position = "relative";
 
     // Name label (always visible)
     const nameSpan = document.createElement("span");
@@ -154,11 +163,19 @@ export class DOMRenderer {
     arrowSpan.textContent = group.collapsed ? "▶" : "▼";
     chip.appendChild(arrowSpan);
 
-    // Click toggles collapse
-    chip.addEventListener("click", (e) => {
+    // Attach listener directly on the element.
+    // window/document listeners don't fire for this area in Obsidian/Electron
+    // even though elementFromPoint correctly resolves to the chip.
+    // Direct element listeners bypass whatever interception is happening.
+    const handler = (e: MouseEvent) => {
+      console.log("[Tab Groups] chip mousedown, groupId:", group.id);
       e.stopPropagation();
+      e.preventDefault();
       void this.onChipClick(group.id);
-    });
+    };
+    chip.addEventListener("mousedown", handler, true);
+    chip.addEventListener("mouseup", handler, true); // fallback
+    chip.addEventListener("click", handler, true); // fallback
 
     return chip;
   }

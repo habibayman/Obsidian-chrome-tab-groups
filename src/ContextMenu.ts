@@ -203,16 +203,8 @@ export class ContextMenuHandler {
               new NewGroupModal(this.plugin.app, async (name, color) => {
                 await this.manager.createGroup(name, color, [leaf]);
                 this.onRender();
-              });
-            })
-            .setChecked(false);
-          // open the modal immediately inline
-          si.onClick(() => {
-            new NewGroupModal(this.plugin.app, async (name, color) => {
-              await this.manager.createGroup(name, color, [leaf]);
-              this.onRender();
-            }).open();
-          });
+              }).open();
+            });
         });
       });
     }
