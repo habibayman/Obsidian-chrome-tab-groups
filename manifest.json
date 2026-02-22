@@ -2,7 +2,7 @@
   "id": "obsidian-tab-groups",
   "name": "Chrome-style Tab Groups",
   "version": "1.0.0",
-  "minAppVersion": "1.4.0",
+  "minAppVersion": "1.5.0",
   "description": "Chrome-style tab grouping for Obsidian - group tabs with a label and color, collapse/expand groups, and persist groups across restarts.",
   "author": "Habiba",
   "authorUrl": "https://github.com/habibayman",
