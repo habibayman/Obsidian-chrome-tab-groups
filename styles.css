@@ -17,6 +17,10 @@
   transition: background-color 0.15s ease;
   box-sizing: border-box;
   overflow: visible;
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  cursor: pointer;
 }
 
 .tab-group-chip:hover {

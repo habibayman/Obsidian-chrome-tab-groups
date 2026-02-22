@@ -142,16 +142,14 @@ export class DOMRenderer {
     run: WorkspaceLeaf[],
     color: string,
   ): HTMLElement {
-    const chip = document.createElement("div");
+    const chip = document.createElement("button");
     chip.className = "tab-group-chip";
     if (group.collapsed) chip.classList.add("tab-group-chip--collapsed");
     chip.dataset.tabGroupChipId = group.id;
     chip.dataset.tabGroupRunSize = String(run.length);
     chip.style.setProperty("--tg-color", color);
-    chip.style.zIndex = "10";
-    chip.style.position = "relative";
 
-    // Name label (always visible)
+    // Name label
     const nameSpan = document.createElement("span");
     nameSpan.className = "tab-group-chip-name";
     nameSpan.textContent = group.name;
@@ -163,27 +161,17 @@ export class DOMRenderer {
     arrowSpan.textContent = group.collapsed ? "▶" : "▼";
     chip.appendChild(arrowSpan);
 
-    // Attach listener directly on the element.
-    // window/document listeners don't fire for this area in Obsidian/Electron
-    // even though elementFromPoint correctly resolves to the chip.
-    // Direct element listeners bypass whatever interception is happening.
-    const handler = (e: MouseEvent) => {
-      console.log("[Tab Groups] chip mousedown, groupId:", group.id);
+    chip.addEventListener("click", (e) => {
       e.stopPropagation();
       e.preventDefault();
       void this.onChipClick(group.id);
-    };
-    chip.addEventListener("mousedown", handler, true);
-    chip.addEventListener("mouseup", handler, true); // fallback
-    chip.addEventListener("click", handler, true); // fallback
+    });
 
     return chip;
   }
 }
 
-// Helpers/Obsidian internals
 function tabHeaderEl(leaf: WorkspaceLeaf): HTMLElement | null {
-  // Obsidian attaches tabHeaderEl directly on the leaf object (internal field)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (leaf as any).tabHeaderEl ?? null;
 }
