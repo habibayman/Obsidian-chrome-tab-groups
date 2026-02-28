@@ -77,6 +77,11 @@ export default class TabGroupsPlugin extends Plugin {
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", () => this.render()),
     );
+    this.app.vault.on("rename", (file, oldPath) => {
+      setTimeout(() => {
+        this.groupManager.handleFileRename(file, oldPath);
+      }, 0);
+    });
 
     // 6. Initial render
     // Wait one tick for Obsidian to finish restoring the layout
