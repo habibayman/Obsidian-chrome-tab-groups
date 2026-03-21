@@ -1,5 +1,10 @@
 import { Menu, Modal, Setting, WorkspaceLeaf, type App } from "obsidian";
-import type { GroupColor } from "./types";
+import type {
+  GroupColor,
+  ObsidianFileView,
+  ObsidianLeaf,
+  ObsidianMenuItem,
+} from "./types";
 import { COLOR_VALUES, GROUP_COLORS } from "./types";
 import type { GroupManager } from "./GroupManager";
 import type TabGroupsPlugin from "./main";
@@ -167,8 +172,7 @@ export class ContextMenuHandler {
     const menu = new Menu();
 
     // Trigger Obsidian's own file-menu event
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const file = (leaf.view as any)?.file ?? null;
+    const file = (leaf.view as ObsidianFileView).file ?? null;
     this.plugin.app.workspace.trigger(
       "file-menu",
       menu,
@@ -189,9 +193,7 @@ export class ContextMenuHandler {
       menu.addItem((item) => {
         item.setTitle("Add to group").setIcon("folder-plus");
         // Build submenu
-        const submenu = (
-          item as unknown as { setSubmenu: () => Menu }
-        ).setSubmenu();
+        const submenu = (item as unknown as ObsidianMenuItem).setSubmenu();
 
         for (const g of otherGroups) {
           submenu.addItem((si) => {
@@ -201,7 +203,7 @@ export class ContextMenuHandler {
             });
             // Color dot via icon color hack
             const titleEl = (
-              si as unknown as { dom: HTMLElement }
+              si as unknown as ObsidianMenuItem
             ).dom?.querySelector(".menu-item-title");
             if (titleEl) {
               const dot = titleEl.createDiv({ cls: "menu-color-dot" });
@@ -256,9 +258,7 @@ export class ContextMenuHandler {
 
       menu.addItem((item) => {
         item.setTitle("Change group color").setIcon("palette");
-        const submenu = (
-          item as unknown as { setSubmenu: () => Menu }
-        ).setSubmenu();
+        const submenu = (item as unknown as ObsidianMenuItem).setSubmenu();
         for (const c of GROUP_COLORS) {
           submenu.addItem((si) => {
             si.setTitle(c.charAt(0).toUpperCase() + c.slice(1)).onClick(
@@ -306,8 +306,7 @@ export class ContextMenuHandler {
     let found: WorkspaceLeaf | null = null;
     this.plugin.app.workspace.iterateRootLeaves((leaf: WorkspaceLeaf) => {
       if (found) return;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if ((leaf as any).tabHeaderEl === tabHeader) {
+      if ((leaf as ObsidianLeaf).tabHeaderEl === tabHeader) {
         found = leaf;
       }
     });
