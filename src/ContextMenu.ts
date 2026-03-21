@@ -118,7 +118,8 @@ class RenameGroupModal extends Modal {
 }
 
 // ContextMenuHandler
-// Registers a single delegated right-click listener on the workspace root.
+// Intercepts right-clicks on tab headers, builds a Menu, triggers Obsidian's
+// own "file-menu" event on it so Obsidian populates its default items, then appends our group items below a separator.
 
 export class ContextMenuHandler {
   private plugin: TabGroupsPlugin;
@@ -141,6 +142,9 @@ export class ContextMenuHandler {
     // Use contextmenu (right-click) on the whole document; we'll filter by
     // whether the target is inside a .workspace-tab-header
     document.addEventListener("contextmenu", this.boundHandler, true);
+    this.plugin.register(() =>
+      document.removeEventListener("contextmenu", this.boundHandler, true),
+    );
   }
 
   unregister(): void {
@@ -160,10 +164,23 @@ export class ContextMenuHandler {
     e.preventDefault();
     e.stopPropagation();
 
-    const existingGroup = this.manager.resolveGroupForLeaf(leaf);
     const menu = new Menu();
 
-    // "Add to group"
+    // Trigger Obsidian's own file-menu event
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const file = (leaf.view as any)?.file ?? null;
+    this.plugin.app.workspace.trigger(
+      "file-menu",
+      menu,
+      file,
+      "tab-header",
+      leaf,
+    );
+
+    // Append our group items below
+    menu.addSeparator();
+
+    const existingGroup = this.manager.resolveGroupForLeaf(leaf);
     const otherGroups = this.manager.groups.filter(
       (g) => g.id !== existingGroup?.id,
     );
@@ -211,8 +228,6 @@ export class ContextMenuHandler {
 
     // Existing group actions
     if (existingGroup) {
-      menu.addSeparator();
-
       menu.addItem((item) => {
         item
           .setTitle("Remove from group")
