@@ -1,5 +1,10 @@
 import { Menu, Modal, Setting, WorkspaceLeaf, type App } from "obsidian";
-import type { GroupColor } from "./types";
+import type {
+  GroupColor,
+  ObsidianFileView,
+  ObsidianLeaf,
+  ObsidianMenuItem,
+} from "./types";
 import { COLOR_VALUES, GROUP_COLORS } from "./types";
 import type { GroupManager } from "./GroupManager";
 import type TabGroupsPlugin from "./main";
@@ -118,7 +123,8 @@ class RenameGroupModal extends Modal {
 }
 
 // ContextMenuHandler
-// Registers a single delegated right-click listener on the workspace root.
+// Intercepts right-clicks on tab headers, builds a Menu, triggers Obsidian's
+// own "file-menu" event on it so Obsidian populates its default items, then appends our group items below a separator.
 
 export class ContextMenuHandler {
   private plugin: TabGroupsPlugin;
@@ -141,6 +147,9 @@ export class ContextMenuHandler {
     // Use contextmenu (right-click) on the whole document; we'll filter by
     // whether the target is inside a .workspace-tab-header
     document.addEventListener("contextmenu", this.boundHandler, true);
+    this.plugin.register(() =>
+      document.removeEventListener("contextmenu", this.boundHandler, true),
+    );
   }
 
   unregister(): void {
@@ -160,10 +169,22 @@ export class ContextMenuHandler {
     e.preventDefault();
     e.stopPropagation();
 
-    const existingGroup = this.manager.resolveGroupForLeaf(leaf);
     const menu = new Menu();
 
-    // "Add to group"
+    // Trigger Obsidian's own file-menu event
+    const file = (leaf.view as ObsidianFileView).file ?? null;
+    this.plugin.app.workspace.trigger(
+      "file-menu",
+      menu,
+      file,
+      "tab-header",
+      leaf,
+    );
+
+    // Append our group items below
+    menu.addSeparator();
+
+    const existingGroup = this.manager.resolveGroupForLeaf(leaf);
     const otherGroups = this.manager.groups.filter(
       (g) => g.id !== existingGroup?.id,
     );
@@ -172,9 +193,7 @@ export class ContextMenuHandler {
       menu.addItem((item) => {
         item.setTitle("Add to group").setIcon("folder-plus");
         // Build submenu
-        const submenu = (
-          item as unknown as { setSubmenu: () => Menu }
-        ).setSubmenu();
+        const submenu = (item as unknown as ObsidianMenuItem).setSubmenu();
 
         for (const g of otherGroups) {
           submenu.addItem((si) => {
@@ -184,7 +203,7 @@ export class ContextMenuHandler {
             });
             // Color dot via icon color hack
             const titleEl = (
-              si as unknown as { dom: HTMLElement }
+              si as unknown as ObsidianMenuItem
             ).dom?.querySelector(".menu-item-title");
             if (titleEl) {
               const dot = titleEl.createDiv({ cls: "menu-color-dot" });
@@ -211,8 +230,6 @@ export class ContextMenuHandler {
 
     // Existing group actions
     if (existingGroup) {
-      menu.addSeparator();
-
       menu.addItem((item) => {
         item
           .setTitle("Remove from group")
@@ -241,9 +258,7 @@ export class ContextMenuHandler {
 
       menu.addItem((item) => {
         item.setTitle("Change group color").setIcon("palette");
-        const submenu = (
-          item as unknown as { setSubmenu: () => Menu }
-        ).setSubmenu();
+        const submenu = (item as unknown as ObsidianMenuItem).setSubmenu();
         for (const c of GROUP_COLORS) {
           submenu.addItem((si) => {
             si.setTitle(c.charAt(0).toUpperCase() + c.slice(1)).onClick(
@@ -291,8 +306,7 @@ export class ContextMenuHandler {
     let found: WorkspaceLeaf | null = null;
     this.plugin.app.workspace.iterateRootLeaves((leaf: WorkspaceLeaf) => {
       if (found) return;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if ((leaf as any).tabHeaderEl === tabHeader) {
+      if ((leaf as ObsidianLeaf).tabHeaderEl === tabHeader) {
         found = leaf;
       }
     });

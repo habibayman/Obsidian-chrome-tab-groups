@@ -1,3 +1,5 @@
+import type { Menu, TFile, WorkspaceLeaf, View } from "obsidian";
+
 export type GroupColor =
   | "grey"
   | "red"
@@ -58,3 +60,16 @@ export const DEFAULT_DATA: PluginData = {
   groups: [],
   settings: { ...DEFAULT_SETTINGS },
 };
+
+export interface ObsidianLeaf extends WorkspaceLeaf {
+  tabHeaderEl: HTMLElement;
+}
+
+export interface ObsidianFileView extends View {
+  file: TFile | null;
+}
+
+export interface ObsidianMenuItem {
+  setSubmenu: () => Menu;
+  dom: HTMLElement;
+}
