@@ -68,7 +68,6 @@ export class TabGroupsSettingTab extends PluginSettingTab {
     setting
       .setDesc(`${group.filePaths.length} file(s)`)
       .addDropdown((dd) => {
-        dd.addOption("", "Color…");
         for (const c of GROUP_COLORS) {
           dd.addOption(c, c.charAt(0).toUpperCase() + c.slice(1));
         }
