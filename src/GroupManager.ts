@@ -1,4 +1,4 @@
-import type { WorkspaceLeaf } from "obsidian";
+import type { TAbstractFile, WorkspaceLeaf } from "obsidian";
 import type { GroupColor, PluginData, PluginSettings, TabGroup } from "./types";
 import { DEFAULT_DATA } from "./types";
 import type TabGroupsPlugin from "./main";
@@ -234,5 +234,19 @@ export class GroupManager {
     }
     // Prune empty groups inline (without saving -> caller saves)
     this.data.groups = this.data.groups.filter((g) => g.filePaths.length > 0);
+  }
+
+  // Event handlers
+  async handleFileRename(
+    file: TAbstractFile,
+    oldPath: string,
+  ): Promise<void> {
+    const group = this.data.groups.find((g) => g.filePaths.includes(oldPath));
+    if (!group) return;
+
+    const newPath = file.path;
+    group.filePaths = group.filePaths.map((p) => p === oldPath ? newPath : p);
+
+    await this.save();
   }
 }
