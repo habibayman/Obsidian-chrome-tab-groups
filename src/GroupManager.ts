@@ -21,6 +21,11 @@ function leafFilePath(leaf: WorkspaceLeaf): string | null {
     // ignore
   }
 
+  // Fallback: use a stable leaf ID for empty/new tabs
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const id = (leaf as any).id;
+  if (typeof id === "string" && id) return `__leaf__${id}`;
+
   return null;
 }
 
@@ -137,7 +142,7 @@ export class GroupManager {
       const parent = leaf.parent as any;
       if (!parent) return;
 
-      const children = parent.children || [];
+      const children: WorkspaceLeaf[] = parent.children || [];
       
       // Find the LAST position of any tab in this group
       let lastGroupIndex = -1;
@@ -149,17 +154,18 @@ export class GroupManager {
           lastGroupIndex = i;
         }
       }
-      // Save state and detach
-      const viewState = leaf.getViewState();
-      const wasBeforeTarget = children.indexOf(leaf) < lastGroupIndex;
-      leaf.detach();
-      
-      // Adjust index if we were before the target (detaching shifts indices)
-      const targetIndex = wasBeforeTarget ? lastGroupIndex : lastGroupIndex + 1;
-      
-      // Create at the correct position
-      const newLeaf = this.plugin.app.workspace.createLeafInParent(parent, targetIndex);
-      newLeaf.setViewState(viewState);
+
+      if (lastGroupIndex === -1) return; // No other group members; no reorder needed
+
+      const currentIndex = children.indexOf(leaf);
+      if (currentIndex === -1) return;
+
+      // Splice out then insert after the last group member
+      children.splice(currentIndex, 1);
+      const insertAt = currentIndex < lastGroupIndex ? lastGroupIndex : lastGroupIndex + 1;
+      children.splice(insertAt, 0, leaf);
+
+      this.plugin.app.workspace.trigger("layout-change");
     } catch {
       // Silently ignore errors
     }
@@ -171,14 +177,15 @@ export class GroupManager {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const parent = leaf.parent as any;
       if (!parent) return;
-      
-      // Save the tab's state, detach it, then add it back at the end
-      const viewState = leaf.getViewState();
-      leaf.detach();
-      
-      // After detaching, just append to the end (no index needed)
-      const newLeaf = this.plugin.app.workspace.createLeafInParent(parent, 999);
-      newLeaf.setViewState(viewState);
+      const children: WorkspaceLeaf[] = parent.children || [];
+
+      const currentIndex = children.indexOf(leaf);
+      if (currentIndex === -1) return;
+
+      children.splice(currentIndex, 1);
+      children.push(leaf);
+
+      this.plugin.app.workspace.trigger("layout-change");
     } catch {
       // Silently ignore errors
     }
@@ -241,6 +248,9 @@ export class GroupManager {
     file: TAbstractFile,
     oldPath: string,
   ): Promise<void> {
+    // __leaf__ keys are not file paths; skip
+    if (oldPath.startsWith("__leaf__")) return;
+
     const group = this.data.groups.find((g) => g.filePaths.includes(oldPath));
     if (!group) return;
 
