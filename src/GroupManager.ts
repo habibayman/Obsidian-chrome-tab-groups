@@ -29,6 +29,10 @@ function leafFilePath(leaf: WorkspaceLeaf): string | null {
   return null;
 }
 
+function isEmptyTabPath(path: string): boolean {
+  return path.startsWith("__leaf__");
+}
+
 // GroupManager
 export class GroupManager {
   private plugin: TabGroupsPlugin;
@@ -47,7 +51,10 @@ export class GroupManager {
       return;
     }
     this.data = {
-      groups: saved.groups ?? [],
+      // empty tabs are session only and must not persist
+      groups: (saved.groups ?? [])
+        .map((g) => ({ ...g, filePaths: g.filePaths.filter((p) => !isEmptyTabPath(p)) }))
+        .filter((g) => g.filePaths.length > 0),
       settings: { ...DEFAULT_DATA.settings, ...(saved.settings ?? {}) },
     };
   }
@@ -98,23 +105,13 @@ export class GroupManager {
   }
 
   // Mutations
-  async createGroup(
-    name: string,
-    color: GroupColor,
-    leaves: WorkspaceLeaf[],
-  ): Promise<TabGroup> {
+  async createGroup(name: string, color: GroupColor, leaves: WorkspaceLeaf[]): Promise<TabGroup> {
     const filePaths = leaves
       .map(leafFilePath)
       .filter((p): p is string => p !== null);
-    // Deduplicate paths that might already be in another group.
+    
     filePaths.forEach((path) => this.removePathFromAllGroups(path));
-    const group: TabGroup = {
-      id: generateId(),
-      name,
-      color,
-      collapsed: false,
-      filePaths,
-    };
+    const group: TabGroup = { id: generateId(), name, color, collapsed: false, filePaths };
     this.data.groups.push(group);
     await this.save();
     return group;
@@ -127,74 +124,15 @@ export class GroupManager {
     this.removePathFromAllGroups(path);
     const group = this.getGroup(groupId);
     if (!group) return;
-    
-    // Move the leaf right after the last tab in this group
-    this.moveLeafAfterLastGroupMember(leaf, group);
-    
-    group.filePaths.push(path);
+
+    // For empty tabs, detach/recreate gives the new leaf a fresh ID, so
+    const canonicalPath = this.moveLeafAfterLastGroupMember(leaf, group, path) ?? path;
+
+    group.filePaths.push(canonicalPath);
     await this.save();
   }
 
-  // Helper to move a leaf right after all other tabs in the same group
-  private moveLeafAfterLastGroupMember(leaf: WorkspaceLeaf, group: TabGroup): void {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const parent = leaf.parent as any;
-      if (!parent) return;
-
-      const children: WorkspaceLeaf[] = parent.children || [];
-      
-      // Find the LAST position of any tab in this group
-      let lastGroupIndex = -1;
-      for (let i = 0; i < children.length; i++) {
-        const child = children[i];
-        if (child === leaf) continue; // Skip the tab we're moving
-        const childPath = leafFilePath(child);
-        if (childPath && group.filePaths.includes(childPath)) {
-          lastGroupIndex = i;
-        }
-      }
-
-      if (lastGroupIndex === -1) return; // No other group members; no reorder needed
-
-      const currentIndex = children.indexOf(leaf);
-      if (currentIndex === -1) return;
-
-      // Splice out then insert after the last group member
-      children.splice(currentIndex, 1);
-      const insertAt = currentIndex < lastGroupIndex ? lastGroupIndex : lastGroupIndex + 1;
-      children.splice(insertAt, 0, leaf);
-
-      this.plugin.app.workspace.trigger("layout-change");
-    } catch {
-      // Silently ignore errors
-    }
-  }
-
-  // Helper to move a leaf to the far right (end of all tabs)
-  private moveLeafToFarRight(leaf: WorkspaceLeaf): void {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const parent = leaf.parent as any;
-      if (!parent) return;
-      const children: WorkspaceLeaf[] = parent.children || [];
-
-      const currentIndex = children.indexOf(leaf);
-      if (currentIndex === -1) return;
-
-      children.splice(currentIndex, 1);
-      children.push(leaf);
-
-      this.plugin.app.workspace.trigger("layout-change");
-    } catch {
-      // Silently ignore errors
-    }
-  }
-
-  async removeLeafFromGroup(
-    groupId: string,
-    leaf: WorkspaceLeaf,
-  ): Promise<void> {
+  async removeLeafFromGroup(groupId: string, leaf: WorkspaceLeaf): Promise<void> {
     const path = leafFilePath(leaf);
     if (!path) return;
     const group = this.getGroup(groupId);
@@ -235,6 +173,68 @@ export class GroupManager {
     await this.save();
   }
 
+  // Private helpers
+  private moveLeafAfterLastGroupMember(
+    leaf: WorkspaceLeaf,
+    group: TabGroup,
+    incomingPath?: string,
+  ): string | undefined {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const parent = leaf.parent as any;
+      if (!parent) return undefined;
+      const children = parent.children || [];
+
+      // Find the last index of any existing group member
+      let lastGroupIndex = -1;
+      for (let i = 0; i < children.length; i++) {
+        const child = children[i];
+        if (child === leaf) continue;
+        const childPath = leafFilePath(child);
+        if (childPath && (group.filePaths.includes(childPath) || childPath === incomingPath)) {
+          lastGroupIndex = i;
+        }
+      }
+
+      if (lastGroupIndex === -1) return undefined; // No other group members; nothing to do
+
+      const viewState = leaf.getViewState();
+      const wasBeforeTarget = children.indexOf(leaf) < lastGroupIndex;
+      leaf.detach();
+      const targetIndex = wasBeforeTarget ? lastGroupIndex : lastGroupIndex + 1;
+      const newLeaf = this.plugin.app.workspace.createLeafInParent(parent, targetIndex);
+      newLeaf.setViewState(viewState);
+
+      if (incomingPath && isEmptyTabPath(incomingPath)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const newId = (newLeaf as any).id;
+        if (typeof newId === "string" && newId) return `__leaf__${newId}`;
+      }
+    } catch {
+      // Silently ignore errors
+    }
+    return undefined;
+  }
+  
+  private moveLeafToFarRight(leaf: WorkspaceLeaf): void {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const parent = leaf.parent as any;
+      if (!parent) return;
+      const children: WorkspaceLeaf[] = parent.children || [];
+
+      const currentIndex = children.indexOf(leaf);
+      if (currentIndex === -1) return;
+
+      children.splice(currentIndex, 1);
+      children.push(leaf);
+
+      this.plugin.app.workspace.trigger("layout-change");
+    } catch {
+      // Silently ignore errors
+    }
+  }
+
   private removePathFromAllGroups(path: string): void {
     for (const group of this.data.groups) {
       group.filePaths = group.filePaths.filter((p) => p !== path);
@@ -244,19 +244,11 @@ export class GroupManager {
   }
 
   // Event handlers
-  async handleFileRename(
-    file: TAbstractFile,
-    oldPath: string,
-  ): Promise<void> {
-    // __leaf__ keys are not file paths; skip
-    if (oldPath.startsWith("__leaf__")) return;
-
+  async handleFileRename(file: TAbstractFile, oldPath: string): Promise<void> {
+    if (isEmptyTabPath(oldPath)) return;
     const group = this.data.groups.find((g) => g.filePaths.includes(oldPath));
     if (!group) return;
-
-    const newPath = file.path;
-    group.filePaths = group.filePaths.map((p) => p === oldPath ? newPath : p);
-
+    group.filePaths = group.filePaths.map((p) => (p === oldPath ? file.path : p));
     await this.save();
   }
 }
