@@ -1,6 +1,6 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
-import type { GroupColor, TabGroup } from "./types";
-import { COLOR_VALUES, GROUP_COLORS } from "./types";
+import type { TabGroup } from "./types";
+import { COLOR_VALUES, GROUP_COLORS, isGroupColor } from "./types";
 import type { GroupManager } from "./GroupManager";
 import type TabGroupsPlugin from "./main";
 
@@ -72,7 +72,8 @@ export class TabGroupsSettingTab extends PluginSettingTab {
           dd.addOption(c, c.charAt(0).toUpperCase() + c.slice(1));
         }
         dd.setValue(group.color).onChange(async (val) => {
-          await this.manager.recolorGroup(group.id, val as GroupColor);
+          if (!isGroupColor(val)) return;
+          await this.manager.recolorGroup(group.id, val);
           this.onRender();
           this.display(); // refresh settings panel
         });

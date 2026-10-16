@@ -1,16 +1,5 @@
-import type { Menu, TFile, WorkspaceLeaf, View } from "obsidian";
 
-export type GroupColor =
-  | "grey"
-  | "red"
-  | "yellow"
-  | "green"
-  | "cyan"
-  | "blue"
-  | "purple"
-  | "pink";
-
-export const GROUP_COLORS: GroupColor[] = [
+export const GROUP_COLORS = [
   "grey",
   "red",
   "yellow",
@@ -19,7 +8,13 @@ export const GROUP_COLORS: GroupColor[] = [
   "blue",
   "purple",
   "pink",
-];
+] as const;
+
+export type GroupColor = (typeof GROUP_COLORS)[number];
+
+export function isGroupColor(value: string): value is GroupColor {
+  return (GROUP_COLORS as readonly string[]).includes(value);
+}
 
 export const COLOR_VALUES: Record<GroupColor, string> = {
   grey: "#5f6368",
@@ -61,15 +56,23 @@ export const DEFAULT_DATA: PluginData = {
   settings: { ...DEFAULT_SETTINGS },
 };
 
-export interface ObsidianLeaf extends WorkspaceLeaf {
-  tabHeaderEl: HTMLElement;
-}
+declare module "obsidian" {
+  interface WorkspaceLeaf {
+    id?: string;
+    tabHeaderEl?: HTMLElement;
+  }
 
-export interface ObsidianFileView extends View {
-  file: TFile | null;
-}
+  interface WorkspaceTabs {
+    children: WorkspaceLeaf[];
+    containerEl: HTMLElement;
+  }
 
-export interface ObsidianMenuItem {
-  setSubmenu: () => Menu;
-  dom: HTMLElement;
+  interface WorkspaceMobileDrawer {
+    children: WorkspaceLeaf[];
+  }
+
+  interface MenuItem {
+    dom: HTMLElement;
+    setSubmenu(): Menu;
+  }
 }

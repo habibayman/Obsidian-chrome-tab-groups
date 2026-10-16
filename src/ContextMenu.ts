@@ -1,10 +1,5 @@
-import { Menu, Modal, Setting, WorkspaceLeaf, type App } from "obsidian";
-import type {
-  GroupColor,
-  ObsidianFileView,
-  ObsidianLeaf,
-  ObsidianMenuItem,
-} from "./types";
+import { FileView, Menu, Modal, Setting, type App, type WorkspaceLeaf } from "obsidian";
+import type { GroupColor } from "./types";
 import { COLOR_VALUES, GROUP_COLORS } from "./types";
 import type { GroupManager } from "./GroupManager";
 import type TabGroupsPlugin from "./main";
@@ -159,8 +154,8 @@ export class ContextMenuHandler {
   // Event handlers
 
   private handleContextMenu(e: MouseEvent): void {
-    const target = e.target as HTMLElement;
-    const tabHeader = target.closest<HTMLElement>(".workspace-tab-header");
+    if (!(e.target instanceof Element)) return;
+    const tabHeader = e.target.closest<HTMLElement>(".workspace-tab-header");
     if (!tabHeader) return;
 
     const leaf = this.findLeafForTabHeader(tabHeader);
@@ -172,7 +167,7 @@ export class ContextMenuHandler {
     const menu = new Menu();
 
     // Trigger Obsidian's own file-menu event
-    const file = (leaf.view as ObsidianFileView).file ?? null;
+    const file = leaf.view instanceof FileView ? leaf.view.file : null;
     this.plugin.app.workspace.trigger(
       "file-menu",
       menu,
@@ -193,7 +188,7 @@ export class ContextMenuHandler {
       menu.addItem((item) => {
         item.setTitle("Add to group").setIcon("folder-plus");
         // Build submenu
-        const submenu = (item as unknown as ObsidianMenuItem).setSubmenu();
+        const submenu = item.setSubmenu();
 
         for (const g of otherGroups) {
           submenu.addItem((si) => {
@@ -202,9 +197,7 @@ export class ContextMenuHandler {
               this.onRender();
             });
             // Color dot via icon color hack
-            const titleEl = (
-              si as unknown as ObsidianMenuItem
-            ).dom?.querySelector(".menu-item-title");
+            const titleEl = si.dom?.querySelector<HTMLElement>(".menu-item-title");
             if (titleEl) {
               const dot = titleEl.createDiv({ cls: "menu-color-dot" });
               dot.style.background = COLOR_VALUES[g.color];
@@ -258,7 +251,7 @@ export class ContextMenuHandler {
 
       menu.addItem((item) => {
         item.setTitle("Change group color").setIcon("palette");
-        const submenu = (item as unknown as ObsidianMenuItem).setSubmenu();
+        const submenu = item.setSubmenu();
         for (const c of GROUP_COLORS) {
           submenu.addItem((si) => {
             si.setTitle(c.charAt(0).toUpperCase() + c.slice(1)).onClick(
@@ -304,11 +297,8 @@ export class ContextMenuHandler {
   // Leaf resolution
   private findLeafForTabHeader(tabHeader: HTMLElement): WorkspaceLeaf | null {
     let found: WorkspaceLeaf | null = null;
-    this.plugin.app.workspace.iterateRootLeaves((leaf: WorkspaceLeaf) => {
-      if (found) return;
-      if ((leaf as ObsidianLeaf).tabHeaderEl === tabHeader) {
-        found = leaf;
-      }
+    this.plugin.app.workspace.iterateRootLeaves((leaf) => {
+      if (!found && leaf.tabHeaderEl === tabHeader) found = leaf;
     });
     return found;
   }

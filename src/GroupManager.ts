@@ -1,4 +1,4 @@
-import type { TAbstractFile, WorkspaceLeaf } from "obsidian";
+import { FileView, type TAbstractFile, type WorkspaceLeaf } from "obsidian";
 import type { GroupColor, PluginData, PluginSettings, TabGroup } from "./types";
 import { DEFAULT_DATA } from "./types";
 import type TabGroupsPlugin from "./main";
@@ -8,25 +8,22 @@ function generateId(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 }
 
+function emptyTabPath(leaf: WorkspaceLeaf): string | null {
+  return leaf.id ? `__leaf__${leaf.id}` : null;
+}
+
 function leafFilePath(leaf: WorkspaceLeaf): string | null {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const viewFile = (leaf.view as any)?.file?.path;
-  if (viewFile) return viewFile;
+  if (leaf.view instanceof FileView && leaf.view.file) return leaf.view.file.path;
 
   try {
-    const state = leaf.getViewState?.();
-    const statePath = state?.state?.file;
+    const statePath = leaf.getViewState().state?.file;
     if (typeof statePath === "string" && statePath) return statePath;
   } catch {
     // ignore
   }
 
   // Fallback: use a stable leaf ID for empty/new tabs
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const id = (leaf as any).id;
-  if (typeof id === "string" && id) return `__leaf__${id}`;
-
-  return null;
+  return emptyTabPath(leaf);
 }
 
 function isEmptyTabPath(path: string): boolean {
@@ -178,12 +175,11 @@ export class GroupManager {
     leaf: WorkspaceLeaf,
     group: TabGroup,
     incomingPath?: string,
-  ): string | undefined {
+  ): string | null {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const parent = leaf.parent as any;
-      if (!parent) return undefined;
-      const children = parent.children || [];
+      const { parent } = leaf;
+      if (!parent) return null;
+      const { children } = parent;
 
       // Find the last index of any existing group member
       let lastGroupIndex = -1;
@@ -196,7 +192,7 @@ export class GroupManager {
         }
       }
 
-      if (lastGroupIndex === -1) return undefined; // No other group members; nothing to do
+      if (lastGroupIndex === -1) return null; // No other group members; nothing to do
 
       const viewState = leaf.getViewState();
       const wasBeforeTarget = children.indexOf(leaf) < lastGroupIndex;
@@ -206,22 +202,19 @@ export class GroupManager {
       newLeaf.setViewState(viewState);
 
       if (incomingPath && isEmptyTabPath(incomingPath)) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const newId = (newLeaf as any).id;
-        if (typeof newId === "string" && newId) return `__leaf__${newId}`;
+        return emptyTabPath(newLeaf);
       }
     } catch {
       // Silently ignore errors
     }
-    return undefined;
+    return null;
   }
   
   private moveLeafToFarRight(leaf: WorkspaceLeaf): void {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const parent = leaf.parent as any;
+      const { parent } = leaf;
       if (!parent) return;
-      const children: WorkspaceLeaf[] = parent.children || [];
+      const { children } = parent;
 
       const currentIndex = children.indexOf(leaf);
       if (currentIndex === -1) return;

@@ -1,4 +1,4 @@
-import type { WorkspaceLeaf, WorkspaceTabs } from "obsidian";
+import type { WorkspaceLeaf, WorkspaceParent, WorkspaceTabs } from "obsidian";
 import type { TabGroup } from "./types";
 import { COLOR_VALUES } from "./types";
 import type { GroupManager } from "./GroupManager";
@@ -25,9 +25,7 @@ export class DOMRenderer {
     // 2. Bucket leaves by their parent WorkspaceTabs strip
     const byStrip = new Map<WorkspaceTabs, WorkspaceLeaf[]>();
     for (const leaf of allRootLeaves) {
-      const parent = leaf.parent as WorkspaceTabs | null;
-      if (!parent) continue;
-      // Only handle WorkspaceTabs (has 'children' as array of leaves)
+      const { parent } = leaf;
       if (!isWorkspaceTabs(parent)) continue;
       let arr = byStrip.get(parent);
       if (!arr) {
@@ -45,12 +43,12 @@ export class DOMRenderer {
 
   cleanupDOM(): void {
     document.querySelectorAll(".tab-group-chip").forEach((el) => el.remove());
-    document.querySelectorAll("[data-tg-id]").forEach((el) => {
+    document.querySelectorAll<HTMLElement>("[data-tg-id]").forEach((el) => {
       el.removeAttribute("data-tg-id");
       el.removeAttribute("data-tg-color");
-      (el as HTMLElement).style.removeProperty("--tg-color");
+      el.style.removeProperty("--tg-color");
       el.removeAttribute("data-tg-collapsed");
-      (el as HTMLElement).style.removeProperty("display");
+      el.style.removeProperty("display");
     });
   }
 
@@ -60,13 +58,11 @@ export class DOMRenderer {
 
   // Per-strip rendering
 
-  private renderStrip(strip: WorkspaceTabs, _leaves: WorkspaceLeaf[]): void {
+  private renderStrip(strip: WorkspaceTabs, leaves: WorkspaceLeaf[]): void {
     // Use the strip's own ordered children array for correct tab order
-    const orderedLeaves: WorkspaceLeaf[] =
-      (strip as unknown as { children: WorkspaceLeaf[] }).children ?? _leaves;
+    const orderedLeaves = strip.children ?? leaves;
 
-    const stripEl = (strip as unknown as { containerEl: HTMLElement })
-      .containerEl;
+    const stripEl = strip.containerEl;
     if (!stripEl) return;
 
     const innerContainer = stripEl.querySelector<HTMLElement>(
@@ -116,7 +112,7 @@ export class DOMRenderer {
 
     // Tag every tab header in the run
     for (const leaf of run) {
-      const tabEl = tabHeaderEl(leaf);
+      const tabEl = leaf.tabHeaderEl;
       if (!tabEl) continue;
       tabEl.dataset.tgId = group.id;
       tabEl.dataset.tgColor = group.color;
@@ -130,7 +126,7 @@ export class DOMRenderer {
     }
 
     // Find the first tab header element in the DOM (chip goes before it)
-    const firstTabEl = tabHeaderEl(run[0]);
+    const firstTabEl = run[0].tabHeaderEl;
     if (!firstTabEl) return;
 
     const chip = this.createChip(group, run, color);
@@ -171,18 +167,6 @@ export class DOMRenderer {
   }
 }
 
-function tabHeaderEl(leaf: WorkspaceLeaf): HTMLElement | null {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (leaf as any).tabHeaderEl ?? null;
-}
-
-function isWorkspaceTabs(node: unknown): node is WorkspaceTabs {
-  // WorkspaceTabs children are leaves; WorkspaceSplit children are WorkspaceItems.
-  // The quickest runtime check without importing the class directly:
-  return (
-    !!node &&
-    typeof node === "object" &&
-    "children" in node &&
-    Array.isArray((node as { children: unknown }).children)
-  );
+function isWorkspaceTabs(node: WorkspaceParent | null): node is WorkspaceTabs {
+  return !!node && "children" in node && Array.isArray(node.children);
 }

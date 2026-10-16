@@ -17,7 +17,7 @@ export default class TabGroupsPlugin extends Plugin {
     // 2. Build renderer and context menu
     this.renderer = new DOMRenderer(
       this.groupManager,
-      async (groupId: string) => {
+      async (groupId) => {
         await this.groupManager.toggleCollapse(groupId);
         this.render();
       },
